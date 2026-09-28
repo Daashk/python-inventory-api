@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 
+from app.routers import items
+
 app = FastAPI(
     title="Inventory API",
     description="A small REST API for managing inventory items.",
     version="0.1.0",
 )
+
+app.include_router(items.router)
 
 
 @app.get("/health")
