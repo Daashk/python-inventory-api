@@ -1,0 +1,21 @@
+# Virtual environment
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+
+# Local database
+*.db
+
+# Environment variables (may contain secrets)
+.env
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
