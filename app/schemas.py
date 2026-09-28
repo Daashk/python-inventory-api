@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -6,7 +8,7 @@ class ItemBase(BaseModel):
 
     name: str = Field(min_length=1, max_length=100)
     sku: str = Field(min_length=1, max_length=50)
-    price: float = Field(ge=0)
+    price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
     quantity: int = Field(ge=0)
 
 
@@ -19,7 +21,7 @@ class ItemUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
     sku: str | None = Field(default=None, min_length=1, max_length=50)
-    price: float | None = Field(default=None, ge=0)
+    price: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     quantity: int | None = Field(default=None, ge=0)
 
     @field_validator("name", "sku", "price", "quantity")
@@ -32,7 +34,7 @@ class ItemUpdate(BaseModel):
         return value
 
 
-class Item(ItemBase):
+class ItemRead(ItemBase):
     """An item as returned by the API."""
 
     id: int

@@ -1,6 +1,7 @@
 import pytest
 
-SAMPLE_ITEM = {"name": "Widget", "sku": "WID-001", "price": 9.99, "quantity": 10}
+# Prices are returned as strings so no precision is lost (e.g. "9.99").
+SAMPLE_ITEM = {"name": "Widget", "sku": "WID-001", "price": "9.99", "quantity": 10}
 
 
 def create_item(client, **overrides):
@@ -26,6 +27,13 @@ def test_create_item(client):
     assert response.json() == {"id": 1, **SAMPLE_ITEM}
 
 
+def test_create_item_accepts_price_as_number(client):
+    response = client.post("/items", json={**SAMPLE_ITEM, "price": 9.99})
+
+    assert response.status_code == 201
+    assert response.json()["price"] == "9.99"
+
+
 def test_create_item_assigns_increasing_ids(client):
     first = create_item(client, sku="A")
     second = create_item(client, sku="B")
@@ -48,6 +56,7 @@ def test_create_item_missing_field_returns_422(client):
         ("name", ""),
         ("sku", ""),
         ("price", -1),
+        ("price", "9.999"),  # more than 2 decimal places
         ("quantity", -1),
         ("quantity", "many"),
     ],
