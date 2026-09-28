@@ -32,7 +32,7 @@ adjusts stock levels without ever letting quantity drop below zero.
 Requires Python 3.13.
 
 ```bash
-git clone https://github.com/<your-username>/python-inventory-api.git
+git clone https://github.com/Daashk/python-inventory-api.git
 cd python-inventory-api
 
 python3 -m venv .venv
