@@ -34,6 +34,20 @@ class ItemUpdate(BaseModel):
         return value
 
 
+class StockAdjustment(BaseModel):
+    """Request body for changing stock. Positive adds, negative removes."""
+
+    amount: int
+
+    @field_validator("amount")
+    @classmethod
+    def reject_zero(cls, value: int) -> int:
+        # Pydantic's Field has no "not equal" constraint, so check it here.
+        if value == 0:
+            raise ValueError("amount must not be zero")
+        return value
+
+
 class ItemRead(ItemBase):
     """An item as returned by the API."""
 

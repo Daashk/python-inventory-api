@@ -1,4 +1,7 @@
 import pytest
+from sqlalchemy.exc import IntegrityError
+
+from app.models import Item
 
 # Prices are returned as strings so no precision is lost (e.g. "9.99").
 SAMPLE_ITEM = {"name": "Widget", "sku": "WID-001", "price": "9.99", "quantity": 10}
@@ -158,6 +161,57 @@ def test_update_item_null_value_returns_422(client):
     assert client.get(f"/items/{created['id']}").json() == created
 
 
+# --- Unique SKU ---
+
+
+def test_create_item_duplicate_sku_returns_409(client):
+    create_item(client, sku="DUP-1")
+
+    response = client.post("/items", json={**SAMPLE_ITEM, "sku": "DUP-1"})
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Item with SKU 'DUP-1' already exists"}
+    assert len(client.get("/items").json()) == 1
+
+
+def test_update_item_to_duplicate_sku_returns_409(client):
+    create_item(client, sku="A")
+    second = create_item(client, sku="B")
+
+    response = client.patch(f"/items/{second['id']}", json={"sku": "A"})
+
+    assert response.status_code == 409
+    assert client.get(f"/items/{second['id']}").json()["sku"] == "B"
+
+
+def test_update_item_with_its_own_sku_succeeds(client):
+    created = create_item(client, sku="A")
+
+    response = client.patch(f"/items/{created['id']}", json={"sku": "A", "quantity": 1})
+
+    assert response.status_code == 200
+    assert response.json() == {**created, "quantity": 1}
+
+
+def test_api_still_works_after_conflict(client):
+    create_item(client, sku="A")
+    client.post("/items", json={**SAMPLE_ITEM, "sku": "A"})  # 409
+
+    response = client.post("/items", json={**SAMPLE_ITEM, "sku": "B"})
+
+    assert response.status_code == 201
+
+
+def test_database_rejects_duplicate_sku(session):
+    # Bypass the API to prove the database itself enforces uniqueness.
+    session.add(Item(name="One", sku="SAME", price="1.00", quantity=1))
+    session.commit()
+    session.add(Item(name="Two", sku="SAME", price="2.00", quantity=2))
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
 # --- DELETE /items/{id} ---
 
 
@@ -184,3 +238,65 @@ def test_deleted_item_id_is_not_reused(client):
     second = create_item(client, sku="B")
 
     assert second["id"] == 2
+
+
+# --- POST /items/{id}/adjust-stock ---
+
+
+def test_adjust_stock_adds(client):
+    created = create_item(client, quantity=10)
+
+    response = client.post(f"/items/{created['id']}/adjust-stock", json={"amount": 5})
+
+    assert response.status_code == 200
+    assert response.json()["quantity"] == 15
+
+
+def test_adjust_stock_removes(client):
+    created = create_item(client, quantity=10)
+
+    response = client.post(f"/items/{created['id']}/adjust-stock", json={"amount": -3})
+
+    assert response.status_code == 200
+    assert response.json()["quantity"] == 7
+    assert client.get(f"/items/{created['id']}").json()["quantity"] == 7
+
+
+def test_adjust_stock_to_exactly_zero(client):
+    created = create_item(client, quantity=10)
+
+    response = client.post(f"/items/{created['id']}/adjust-stock", json={"amount": -10})
+
+    assert response.status_code == 200
+    assert response.json()["quantity"] == 0
+
+
+def test_adjust_stock_below_zero_returns_409(client):
+    created = create_item(client, quantity=10)
+
+    response = client.post(f"/items/{created['id']}/adjust-stock", json={"amount": -11})
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Insufficient stock: quantity is 10, cannot remove 11"
+    }
+    assert client.get(f"/items/{created['id']}").json()["quantity"] == 10
+
+
+def test_adjust_stock_missing_item_returns_404(client):
+    response = client.post("/items/999/adjust-stock", json={"amount": 1})
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{}, {"amount": "abc"}, {"amount": 1.5}, {"amount": 0}],
+    ids=["missing", "not-a-number", "fraction", "zero"],
+)
+def test_adjust_stock_invalid_amount_returns_422(client, payload):
+    created = create_item(client)
+
+    response = client.post(f"/items/{created['id']}/adjust-stock", json=payload)
+
+    assert response.status_code == 422
