@@ -29,13 +29,13 @@ def commit_or_409(session: Session, sku: str) -> None:
     """
     try:
         session.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         # A failed commit leaves the session unusable until it is rolled back.
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Item with SKU '{sku}' already exists",
-        )
+        ) from exc
 
 
 @router.post("", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
@@ -75,7 +75,9 @@ def update_item(item_id: int, item_in: ItemUpdate, session: SessionDep) -> Item:
 
 
 @router.post("/{item_id}/adjust-stock", response_model=ItemRead)
-def adjust_stock(item_id: int, adjustment: StockAdjustment, session: SessionDep) -> Item:
+def adjust_stock(
+    item_id: int, adjustment: StockAdjustment, session: SessionDep
+) -> Item:
     item = get_item_or_404(session, item_id)
     new_quantity = item.quantity + adjustment.amount
     if new_quantity < 0:
